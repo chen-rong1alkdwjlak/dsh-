@@ -1,0 +1,7 @@
+# 编排台（dsh-orchestra）— 挂载声明。
+# 宿主半区：/orchestra/api 路由、会话桥、编排工具、一级禁忌系统提示。
+# 浏览器半区：侧栏「编排台」入口与主面板（iframe 画布）。
+
+- insert:
+    - id: dsh-orchestra
+      name: dsh-orchestra

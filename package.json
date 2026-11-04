@@ -1,0 +1,63 @@
+{
+  "name": "dsh-orchestra",
+  "version": "0.1.3",
+  "private": true,
+  "description": "编排台：ComfyUI 式连线工作台。总对话拆解任务、派生互相隔离的子对话，并用分级知识库（一级禁忌最高）约束每个严格对话。",
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "lib",
+    "app",
+    "docs",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-api-session-controller",
+        "@deepseek-ai/dsh-client-ui-workspace"
+      ]
+    }
+  },
+  "scripts": {
+    "test": "node --test test",
+    "check": "node --check index.js && node --check client.js && node --check app/app.js"
+  },
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "orchestration",
+    "canvas",
+    "comfyui",
+    "subagent",
+    "workflow"
+  ],
+  "engines": {
+    "node": ">=22.19.0",
+    "dsh": ">=0.2.1-rc.2 <0.3.0-0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/chen-rong1alkdwjlak/dsh-.git"
+  },
+  "homepage": "https://github.com/chen-rong1alkdwjlak/dsh-",
+  "bugs": {
+    "url": "https://github.com/chen-rong1alkdwjlak/dsh-/issues"
+  },
+  "license": "MIT"
+}
