@@ -454,7 +454,7 @@
     const localById = new Map(S.board.nodes.map((node) => [node.id, node]));
     const freshIds = new Set(fresh.nodes.map((node) => node.id));
     // 旧宿主没有 followCurrent 字段；用本地偏好兜底，避免刚取消跟随又被服务端刷回 true。
-    const follow = fresh.followCurrent === undefined ? S.board.followCurrent !== false : fresh.followCurrent !== false;
+    const follow = fresh.followCurrent === undefined ? S.board.followCurrent === true : fresh.followCurrent === true;
     const followBridge = follow && S.bridgeSession?.id;
     const nodes = fresh.nodes.map((node) => {
       const local = localById.get(node.id);
@@ -568,7 +568,7 @@
           h('div', { class: 'node-goal', text: node.sessionId === '' ? '还没有绑定 DSH 会话。选中此节点，在右侧绑定当前对话。' : (node.masterTitle || node.sessionId) }),
           h('div', { class: 'node-meta' },
             h('span', { class: `chip ${running ? 'info' : ''}`, text: running ? '运行中' : node.sessionId ? '空闲' : '未绑定' }),
-            h('span', { class: `chip ${S.board?.followCurrent !== false ? 'ok' : ''}`, text: S.board?.followCurrent !== false ? '跟随当前' : '固定绑定' }),
+            h('span', { class: `chip ${S.board?.followCurrent === true ? 'ok' : ''}`, text: S.board?.followCurrent === true ? '跟随当前' : '固定绑定' }),
             h('span', { class: 'chip', text: `任务 ${activeTaskNodes().length}` }),
             h('span', { class: 'chip', text: `待验收 ${activeTaskNodes().filter((task) => task.status === 'review').length}` }),
           ),
@@ -1193,7 +1193,7 @@
       h('h3', { text: node.title || '总对话' }),
       h('div', { class: 'sub', text: '总对话：负责拆解、派发、验收；本身不直接做子任务。' }),
       h('label', { class: 'row', style: { margin: '2px 0 10px' } },
-        h('input', { type: 'checkbox', checked: S.board.followCurrent !== false, onchange: (event) => void setFollowCurrent(event.target.checked) }),
+        h('input', { type: 'checkbox', checked: S.board.followCurrent === true, onchange: (event) => void setFollowCurrent(event.target.checked) }),
         h('span', { text: '跟随当前 DSH 对话（切换会话时自动改绑总对话）' }),
       ),
       h('div', { class: 'field' },
@@ -1215,9 +1215,17 @@
       h('div', { class: 'section' },
         h('div', { class: 'sub', text: S.bridgeSession ? `当前 DSH 对话：${S.bridgeSession.title}` : '当前没有检测到 DSH 对话（从侧栏面板打开时会自动桥接）' }),
         h('div', { class: 'row' },
-          h('button', { class: 'btn btn-primary', text: '用当前对话作总对话', disabled: S.bridgeSession === null, onclick: () => bindMaster(S.bridgeSession?.id ?? '', S.bridgeSession?.title ?? '', true) }),
+          h('button', { class: 'btn btn-primary', text: '用当前对话作总对话', disabled: S.bridgeSession === null, onclick: () => bindMaster(S.bridgeSession?.id ?? '', S.bridgeSession?.title ?? '', false) }),
           node.sessionId ? h('button', { class: 'btn', text: '打开', onclick: () => postToParent('orchestra:open-session', { sessionId: node.sessionId }) }) : null,
         ),
+      ),
+      h('div', { class: 'section' },
+        h('div', { class: 'sub', text: '总对话模型（不花 API 余额）' }),
+        h('div', { class: 'row' },
+          h('button', { class: 'btn btn-sm', text: '网页版 · 快速', onclick: () => switchMasterModel('deepseek-chat') }),
+          h('button', { class: 'btn btn-sm', text: '网页版 · 思考', onclick: () => switchMasterModel('deepseek-reasoner') }),
+        ),
+        h('div', { class: 'faint', style: { marginTop: '6px' }, text: '走 chat.deepseek.com 网页登录态，不消耗 API token；需安装并登录 dsh-deepseek-web-login。只改这条总对话，子对话仍用各自的模型。' }),
       ),
       h('div', { class: 'section' },
         h('div', { class: 'kv' }, h('span', { text: '状态' }), h('span', { text: running ? '运行中' : node.sessionId ? '空闲' : '未绑定' })),
@@ -1403,7 +1411,7 @@
 
   /** 跟随当前 DSH 对话：把总对话节点指向 bridge 里的会话。 */
   function syncMasterToBridge({ render = true } = {}) {
-    if (S.board === null || S.board.followCurrent === false || !S.bridgeSession?.id) return false;
+    if (S.board === null || S.board.followCurrent !== true || !S.bridgeSession?.id) return false;
     const master = S.board.nodes.find((node) => node.type === 'master');
     if (master === undefined) return false;
     if (master.sessionId === S.bridgeSession.id && S.board.masterSessionId === S.bridgeSession.id) return false;
@@ -1423,7 +1431,7 @@
   function scheduleFollowPersist() {
     clearTimeout(S.followTimer);
     S.followTimer = setTimeout(async () => {
-      if (S.board === null || S.board.followCurrent === false || !S.bridgeSession?.id) return;
+      if (S.board === null || S.board.followCurrent !== true || !S.bridgeSession?.id) return;
       try {
         const data = await api(`/boards/${encodeURIComponent(S.boardId)}`, {
           method: 'PATCH',
@@ -1472,6 +1480,15 @@
     }
   }
 
+  async function switchMasterModel(model) {
+    try {
+      await api(`/boards/${encodeURIComponent(S.boardId)}/master/model`, { method: 'POST', body: { model } });
+      toast(model === 'deepseek-reasoner' ? '总对话已切到 DeepSeek 网页版 · 思考' : '总对话已切到 DeepSeek 网页版 · 快速', 'ok');
+    } catch (error) {
+      toast(error.message, 'error');
+    }
+  }
+
   async function bindMaster(sessionId, title, followCurrent = false) {
     if (!sessionId) {
       toast('先选择一个会话', 'error');
@@ -1484,7 +1501,7 @@
       storeFollow(S.boardId, followCurrent);
       S.home.boards = S.home.boards.map((item) => item.id === S.board.id ? { ...item, masterSessionId: sessionId, masterTitle: title } : item);
       renderBoard();
-      toast(followCurrent ? '总对话已跟随当前对话' : '总对话已绑定');
+      toast(followCurrent ? '总对话已跟随当前对话' : '总对话已固定绑定');
     } catch (error) {
       toast(error.message, 'error');
     }

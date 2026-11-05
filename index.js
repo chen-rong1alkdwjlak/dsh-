@@ -673,7 +673,7 @@ async function route(method, path, query, body, req) {
           cwd: body.cwd ?? draft.settings.defaultCwd ?? '',
           masterSessionId: body.masterSessionId ?? draft.bridge.currentSessionId ?? '',
           masterTitle: body.masterTitle ?? draft.bridge.currentSessionTitle ?? '',
-          followCurrent: body.followCurrent !== false,
+          followCurrent: body.followCurrent === true,
         });
         draft.boards.push(board);
       });
@@ -748,6 +748,19 @@ async function route(method, path, query, body, req) {
         boardUpdatedAt = board.updatedAt;
       });
       return { status: 201, body: { task, boardUpdatedAt } };
+    }
+    if (method === 'POST' && segments.length === 4 && segments[2] === 'master' && segments[3] === 'model') {
+      const state = await snapshot();
+      const board = findBoard(state, boardId);
+      const sessionId = requireMasterSession(board);
+      const model = body.model === 'deepseek-reasoner' ? 'deepseek-reasoner' : 'deepseek-chat';
+      try {
+        await bridge.service().selectModel({ sessionId, provider: 'deepseek-web', model });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        throw new HttpError(400, `切换网页模型失败：${message}。请先安装并登录 dsh-deepseek-web-login（设置 → DeepSeek 网页登录），再重试。`);
+      }
+      return { body: { provider: 'deepseek-web', model } };
     }
     if (method === 'POST' && segments.length === 4 && segments[2] === 'master' && segments[3] === 'send') {
       const state = await snapshot();

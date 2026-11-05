@@ -1,6 +1,6 @@
 {
   "name": "dsh-orchestra",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "private": true,
   "description": "编排台：ComfyUI 式连线工作台。总对话拆解任务、派生互相隔离的子对话，并用分级知识库（一级禁忌最高）约束每个严格对话。",
   "type": "module",
