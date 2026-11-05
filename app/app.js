@@ -1224,8 +1224,9 @@
         h('div', { class: 'row' },
           h('button', { class: 'btn btn-sm', text: '网页版 · 快速', onclick: () => switchMasterModel('deepseek-chat') }),
           h('button', { class: 'btn btn-sm', text: '网页版 · 思考', onclick: () => switchMasterModel('deepseek-reasoner') }),
+          h('button', { class: 'btn btn-sm btn-ghost', text: '跟随 DSH 默认', onclick: () => switchMasterModel('default') }),
         ),
-        h('div', { class: 'faint', style: { marginTop: '6px' }, text: '走 chat.deepseek.com 网页登录态，不消耗 API token；需安装并登录 dsh-deepseek-web-login。只改这条总对话，子对话仍用各自的模型。' }),
+        h('div', { class: 'faint', style: { marginTop: '6px' }, text: '只改这条总对话，不改 DSH 默认模型；子对话仍按默认模型创建。网页版走 chat.deepseek.com 登录态，不消耗 API token。' }),
       ),
       h('div', { class: 'section' },
         h('div', { class: 'kv' }, h('span', { text: '状态' }), h('span', { text: running ? '运行中' : node.sessionId ? '空闲' : '未绑定' })),
@@ -1483,7 +1484,8 @@
   async function switchMasterModel(model) {
     try {
       await api(`/boards/${encodeURIComponent(S.boardId)}/master/model`, { method: 'POST', body: { model } });
-      toast(model === 'deepseek-reasoner' ? '总对话已切到 DeepSeek 网页版 · 思考' : '总对话已切到 DeepSeek 网页版 · 快速', 'ok');
+      const label = model === 'default' ? 'DSH 默认模型' : model === 'deepseek-reasoner' ? 'DeepSeek 网页版 · 思考' : 'DeepSeek 网页版 · 快速';
+      toast(`总对话已切到 ${label}（只影响这条会话）`, 'ok');
     } catch (error) {
       toast(error.message, 'error');
     }

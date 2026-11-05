@@ -49,6 +49,18 @@ function replyFor(text) {
   return '收到，我先记下。';
 }
 
+const defaultModel = {
+  current: { provider: 'deepseek-account', model: 'deepseek-flash' },
+  saves: 0,
+  currentSelection() {
+    return this.current;
+  },
+  async saveSelection(selection) {
+    this.saves += 1;
+    this.current = selection;
+  },
+};
+
 const sessionController = {
   async create(request) {
     childCounter += 1;
@@ -79,6 +91,10 @@ const sessionController = {
   async projections() {
     return { kind: 'sequenced', asOfSeq: 0, values: { title: '' } };
   },
+  async selectModel(request) {
+    await defaultModel.saveSelection({ provider: request.provider, model: request.model });
+    return { selected: { provider: request.provider, model: request.model } };
+  },
 };
 
 const ctx = {
@@ -91,6 +107,7 @@ const ctx = {
   get(name) {
     if (name === 'sessionController') return sessionController;
     if (name === 'sessionProjections') return { snapshot: (session) => ({ values: { title: session.title ?? '' } }) };
+    if (name === 'agentDefaultModel') return defaultModel;
     if (name === 'systemPrompt') return { section: (def) => { systemSections.push(def); return () => {}; } };
     if (name === 'tools') return { register: (def) => { toolDefs.push(def); return () => {}; }, get: () => undefined };
     if (name === 'workspaceRegistry') {
@@ -153,6 +170,11 @@ try {
   const created = await call('/orchestra/api/boards', { method: 'POST', body: { name: '冒烟板', goal: '把登录页改好', masterSessionId: master.id, masterTitle: master.title } });
   const boardId = created.board.id;
   check('建板并自带总对话节点', created.board.nodes.some((node) => node.type === 'master' && node.sessionId === master.id));
+
+  const webModel = await call(`/orchestra/api/boards/${boardId}/master/model`, { method: 'POST', body: { model: 'deepseek-chat' } });
+  check('网页模型只改总对话，不改默认', webModel.provider === 'deepseek-web' && webModel.sessionOnly === true && defaultModel.saves === 0 && defaultModel.current.provider === 'deepseek-account');
+  const backModel = await call(`/orchestra/api/boards/${boardId}/master/model`, { method: 'POST', body: { model: 'default' } });
+  check('总对话可恢复 DSH 默认模型', backModel.provider === 'deepseek-account' && defaultModel.saves === 0);
 
   const planStart = await call(`/orchestra/api/boards/${boardId}/plan`, { method: 'POST', body: {} });
   let planJob;

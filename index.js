@@ -239,6 +239,33 @@ async function setChildArchived(sessionId, archived, { force = false } = {}) {
   else await registry.unarchiveSession(sessionId);
 }
 
+/**
+ * 只给一条会话设置模型，不改 DSH 的全局默认模型。
+ * sessionController.selectModel() 会顺手把选择写成默认；这里临时屏蔽那次写入，
+ * 让子对话继续按 DSH 默认模型创建。
+ */
+async function selectSessionModel(sessionId, selection) {
+  const controller = bridge.service();
+  const defaultModel = bridge.ctx.get('agentDefaultModel');
+  const original = defaultModel?.saveSelection;
+  let patched = false;
+  if (defaultModel !== undefined && typeof original === 'function') {
+    try {
+      defaultModel.saveSelection = () => Promise.resolve();
+      patched = defaultModel.saveSelection !== original;
+    } catch {
+      patched = false;
+    }
+  }
+  if (!patched) throw new Error('当前宿主无法在不修改默认模型的情况下切换会话模型');
+  try {
+    const result = await controller.selectModel({ sessionId, ...selection });
+    return result?.selected ?? selection;
+  } finally {
+    defaultModel.saveSelection = original;
+  }
+}
+
 async function acceptTask(boardId, taskId, { pass, note = '' }) {
   const state = await snapshot();
   const board = findBoard(state, boardId);
@@ -753,14 +780,24 @@ async function route(method, path, query, body, req) {
       const state = await snapshot();
       const board = findBoard(state, boardId);
       const sessionId = requireMasterSession(board);
-      const model = body.model === 'deepseek-reasoner' ? 'deepseek-reasoner' : 'deepseek-chat';
+      let selection;
+      if (body.model === 'default') {
+        const current = bridge.ctx.get('agentDefaultModel')?.currentSelection?.();
+        if (current === undefined || current === null) throw new HttpError(400, '读不到 DSH 默认模型');
+        selection = { provider: current.provider, model: current.model, ...(current.reasoningEffort === undefined ? {} : { reasoningEffort: current.reasoningEffort }) };
+      } else {
+        selection = {
+          provider: 'deepseek-web',
+          model: body.model === 'deepseek-reasoner' ? 'deepseek-reasoner' : 'deepseek-chat',
+        };
+      }
       try {
-        await bridge.service().selectModel({ sessionId, provider: 'deepseek-web', model });
+        const selected = await selectSessionModel(sessionId, selection);
+        return { body: { ...selected, sessionOnly: true } };
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        throw new HttpError(400, `切换网页模型失败：${message}。请先安装并登录 dsh-deepseek-web-login（设置 → DeepSeek 网页登录），再重试。`);
+        throw new HttpError(400, `切换总对话模型失败：${message}。网页版需要先安装并登录 dsh-deepseek-web-login（设置 → DeepSeek 网页登录）。`);
       }
-      return { body: { provider: 'deepseek-web', model } };
     }
     if (method === 'POST' && segments.length === 4 && segments[2] === 'master' && segments[3] === 'send') {
       const state = await snapshot();
