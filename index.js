@@ -247,6 +247,7 @@ async function setChildArchived(sessionId, archived, { force = false } = {}) {
 async function selectSessionModel(sessionId, selection) {
   const controller = bridge.service();
   const defaultModel = bridge.ctx.get('agentDefaultModel');
+  const defaultBefore = defaultModel?.currentSelection?.();
   const original = defaultModel?.saveSelection;
   let patched = false;
   if (defaultModel !== undefined && typeof original === 'function') {
@@ -258,12 +259,20 @@ async function selectSessionModel(sessionId, selection) {
     }
   }
   if (!patched) throw new Error('当前宿主无法在不修改默认模型的情况下切换会话模型');
+  let selected;
   try {
     const result = await controller.selectModel({ sessionId, ...selection });
-    return result?.selected ?? selection;
+    selected = result?.selected ?? selection;
   } finally {
     defaultModel.saveSelection = original;
   }
+  // 双保险：如果宿主版本在别处仍写了默认模型，切回切换前的默认值。
+  const defaultAfter = defaultModel.currentSelection?.();
+  if (defaultBefore !== undefined && defaultAfter !== undefined
+    && (defaultAfter.provider !== defaultBefore.provider || defaultAfter.model !== defaultBefore.model)) {
+    await defaultModel.saveSelection(defaultBefore);
+  }
+  return selected;
 }
 
 async function acceptTask(boardId, taskId, { pass, note = '' }) {
